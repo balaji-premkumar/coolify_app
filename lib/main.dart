@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'features/home_screen.dart';
+import 'features/shell.dart';
+import 'data/providers.dart';
 import 'features/lock_screen.dart';
 import 'features/onboarding_screen.dart';
+import 'core/coolify_client.dart';
 import 'security/credential_store.dart';
 import 'security/lock_controller.dart';
 
@@ -57,10 +59,17 @@ class _GateState extends ConsumerState<Gate> {
         onDone: (c) => setState(() { _creds = c; _renewing = false; }),
       );
     } else {
-      body = HomeScreen(
-        creds: _creds!,
-        onTokenRejected: () => setState(() => _renewing = true),
-        onDisconnect: () async { await _store.clear(); setState(() => _creds = null); },
+      final c = _creds!;
+      body = ProviderScope(
+        retry: (_, _) => null,
+        key: ValueKey(c.token),
+        overrides: [
+          clientProvider.overrideWithValue(CoolifyClient(baseUrl: c.baseUrl, token: c.token)),
+          tokenRejectedProvider.overrideWithValue(() { if (mounted && !_renewing) setState(() => _renewing = true); }),
+          tokenExpiryProvider.overrideWithValue(c.tokenExpiresAt),
+          baseUrlProvider.overrideWithValue(c.baseUrl),
+        ],
+        child: Shell(onDisconnect: () async { await _store.clear(); setState(() => _creds = null); }),
       );
     }
     return Stack(children: [
