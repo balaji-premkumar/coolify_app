@@ -12,12 +12,9 @@ flutter run
 
 ## Releases (CD)
 
-Pushing a tag `vX.Y.Z` runs `.github/workflows/release-apk.yml`, which analyzes, tests, builds a signed release APK and publishes it to:
+Pushing a tag `vX.Y.Z` runs `.github/workflows/release-apk.yml`, which analyzes, tests, builds a signed release APK and publishes it as a **GitHub Release** – `coolify-mobile-X.Y.Z.apk` plus a `.sha256` file (easiest place to download from a phone).
 
-- **GitHub Releases** – `coolify-mobile-X.Y.Z.apk` plus a `.sha256` file (easiest place to download from a phone).
-- **GitHub Packages** – `ghcr.io/<owner>/<repo>/apk:X.Y.Z` (and `latest`) as an OCI artifact. GitHub Packages has no APK registry, so fetch it with `oras pull ghcr.io/<owner>/<repo>/apk:latest`. The package is private by default; change its visibility under the repository's Packages settings.
-
-The workflow can also be started manually (Actions → Release APK → Run workflow); it then publishes a `-dev.N` build to Packages only.
+The workflow can also be started manually (Actions → Release APK → Run workflow); it then only uploads a `-dev.N` build as a workflow artifact (no Release).
 
 ### One-time setup: signing key
 
