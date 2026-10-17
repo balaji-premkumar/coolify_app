@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/shell.dart';
-import 'data/providers.dart';
+import 'data/accounts.dart';
 import 'features/lock_screen.dart';
 import 'features/onboarding_screen.dart';
-import 'core/coolify_client.dart';
-import 'security/credential_store.dart';
 import 'security/lock_controller.dart';
 
 void main() => runApp(const ProviderScope(child: CoolifyApp()));
@@ -21,61 +19,31 @@ class CoolifyApp extends StatelessWidget {
       );
 }
 
-/// lock -> (onboarding | token renewal | home). Credentials are read from
-/// secure storage only after a successful unlock.
-class Gate extends ConsumerStatefulWidget {
+/// lock -> (onboarding | token renewal | home). Servers are read from secure
+/// storage only after a successful unlock.
+class Gate extends ConsumerWidget {
   const Gate({super.key});
   @override
-  ConsumerState<Gate> createState() => _GateState();
-}
-
-class _GateState extends ConsumerState<Gate> {
-  final _store = CredentialStore();
-  Credentials? _creds;
-  bool _loaded = false;
-  bool _renewing = false;
-
-  Future<void> _load() async {
-    final c = await _store.read();
-    if (mounted) setState(() { _creds = c; _loaded = true; });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final lock = ref.watch(lockProvider);
-    final cover = ref.read(lockProvider.notifier).coverVisible;
-    Widget body;
-    if (lock != AppLockState.unlocked) {
-      _loaded = false;
-      _creds = null; // in-memory copy dropped; secure storage untouched
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locked = ref.watch(lockProvider) != AppLockState.unlocked;
+    final acc = ref.watch(accountsProvider);
+    final accounts = ref.read(accountsProvider.notifier);
+    final Widget body;
+    if (locked) {
       body = const LockScreen();
-    } else if (!_loaded) {
-      _load();
+    } else if (!acc.loaded) {
       body = const Scaffold(body: Center(child: CircularProgressIndicator()));
-    } else if (_creds == null || _renewing) {
-      body = OnboardingScreen(
-        store: _store,
-        existing: _renewing ? _creds : null,
-        onDone: (c) => setState(() { _creds = c; _renewing = false; }),
-      );
+    } else if (acc.list.isEmpty) {
+      body = OnboardingScreen(onDone: accounts.add);
+    } else if (acc.renewing) {
+      body = OnboardingScreen(existing: acc.active, onDone: accounts.update);
     } else {
-      final c = _creds!;
-      body = ProviderScope(
-        retry: (_, _) => null,
-        key: ValueKey(c.token),
-        overrides: [
-          clientProvider.overrideWithValue(CoolifyClient(baseUrl: c.baseUrl, token: c.token)),
-          tokenRejectedProvider.overrideWithValue(() { if (mounted && !_renewing) setState(() => _renewing = true); }),
-          tokenExpiryProvider.overrideWithValue(c.tokenExpiresAt),
-          baseUrlProvider.overrideWithValue(c.baseUrl),
-        ],
-        child: Shell(onDisconnect: () async { await _store.clear(); setState(() => _creds = null); }),
-      );
+      body = const Shell();
     }
     return Stack(children: [
       body,
       ValueListenableBuilder<bool>(
-        valueListenable: cover,
+        valueListenable: ref.read(lockProvider.notifier).coverVisible,
         builder: (_, v, _) => v
             ? Positioned.fill(child: ColoredBox(color: Theme.of(context).colorScheme.surface,
                 child: const Center(child: Icon(Icons.lock_outline, size: 48))))

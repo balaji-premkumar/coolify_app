@@ -1,16 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/accounts.dart';
 import '../data/models.dart';
 import '../data/providers.dart';
 import '../shared/widgets.dart';
 import 'deployments.dart';
 import 'resources.dart';
 import 'servers.dart';
+import 'settings.dart';
 
 class Shell extends ConsumerStatefulWidget {
-  const Shell({super.key, required this.onDisconnect});
-  final VoidCallback onDisconnect;
+  const Shell({super.key});
   @override
   ConsumerState<Shell> createState() => _ShellState();
 }
@@ -20,7 +21,7 @@ class _ShellState extends ConsumerState<Shell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      Dashboard(onDisconnect: widget.onDisconnect),
+      const Dashboard(),
       const ResourcesPage(),
       const DeploymentsPage(),
       const ServersPage(),
@@ -42,8 +43,7 @@ class _ShellState extends ConsumerState<Shell> {
 }
 
 class Dashboard extends ConsumerWidget {
-  const Dashboard({super.key, required this.onDisconnect});
-  final VoidCallback onDisconnect;
+  const Dashboard({super.key});
 
   void _refresh(WidgetRef ref) {
     ref.invalidate(versionProvider);
@@ -65,22 +65,9 @@ class Dashboard extends ConsumerWidget {
       appBar: AppBar(title: const Text('Coolify'), actions: [
         IconButton(icon: const Icon(Icons.refresh), onPressed: () => _refresh(ref)),
         IconButton(
-          icon: const Icon(Icons.link_off),
-          tooltip: 'Disconnect',
-          onPressed: () async {
-            final ok = await showDialog<bool>(
-              context: context,
-              builder: (c) => AlertDialog(
-                title: const Text('Disconnect?'),
-                content: const Text('The saved URL and token will be erased from this device.'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-                  FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Disconnect')),
-                ],
-              ),
-            );
-            if (ok == true) onDisconnect();
-          },
+          icon: const Icon(Icons.settings_outlined),
+          tooltip: 'Servers & tokens',
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
         ),
       ]),
       body: RefreshIndicator(
@@ -96,8 +83,8 @@ class Dashboard extends ConsumerWidget {
             ),
           Card(
             child: ListTile(
-              title: Text(ref.watch(baseUrlProvider)),
-              subtitle: Text('Coolify ${version.value ?? '…'}'),
+              title: Text(ref.watch(accountsProvider.select((s) => s.active?.name)) ?? ref.watch(baseUrlProvider)),
+              subtitle: Text('${ref.watch(baseUrlProvider)} · Coolify ${version.value ?? '…'}'),
               leading: const Icon(Icons.cloud_done_outlined),
             ),
           ),

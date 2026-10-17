@@ -22,6 +22,7 @@ class _Fake implements HttpClientAdapter {
 }
 
 void main() {
+  serviceTests();
   testWidgets('resources list renders, filters and opens detail', (tester) async {
     final client = CoolifyClient(baseUrl: 'https://x.test', token: 't');
     client.dio.httpClientAdapter = _Fake({
@@ -50,5 +51,50 @@ void main() {
     expect(find.text('git_branch'), findsOneWidget);
     expect(find.text('hunter2'), findsNothing); // secret masked until revealed
     expect(find.text('Deployments'), findsOneWidget);
+  });
+}
+
+void serviceTests() {
+  testWidgets('service page: sections, compose resources, envs', (tester) async {
+    final client = CoolifyClient(baseUrl: 'https://x.test', token: 't');
+    client.dio.httpClientAdapter = _Fake({
+      '/resources': [
+        {'uuid': 's1', 'name': 'stack', 'type': 'service', 'status': 'running:healthy'},
+      ],
+      '/services/s1': {'uuid': 's1', 'name': 'stack', 'description': 'my stack', 'status': 'running:healthy'},
+      '/services/s1/applications': [
+        {'uuid': 'a1', 'name': 'web', 'image': 'nginx:1', 'fqdn': 'https://w.test', 'status': 'running:healthy'},
+      ],
+      '/services/s1/databases': [
+        {'uuid': 'd1', 'name': 'pg', 'image': 'postgres:16', 'status': 'running:healthy'},
+      ],
+      '/services/s1/envs': [{'uuid': 'e1', 'key': 'APP_MODE', 'value': 'prod'}],
+      '/services/s1/scheduled-tasks': [{'name': 'nightly', 'frequency': '0 0 * * *', 'command': 'run', 'enabled': true}],
+    });
+    await tester.pumpWidget(ProviderScope(
+      overrides: [clientProvider.overrideWithValue(client)],
+      child: const MaterialApp(home: ResourcesPage()),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('stack'));
+    await tester.pumpAndSettle();
+    expect(find.text('Compose resources'), findsOneWidget);
+    expect(find.text('Web'), findsOneWidget);
+    expect(find.text('Pg'), findsOneWidget);
+
+    var current = 'General';
+    Future<void> goto(String section) async {
+      await tester.tap(find.widgetWithText(TextButton, current));
+      current = section;
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(section));
+      await tester.pumpAndSettle();
+    }
+
+    await goto('Environment Variables');
+    expect(find.text('APP_MODE'), findsOneWidget);
+    expect(find.text('prod'), findsOneWidget);
+    await goto('Scheduled Tasks');
+    expect(find.text('nightly'), findsOneWidget);
   });
 }

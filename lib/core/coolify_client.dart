@@ -63,6 +63,39 @@ class CoolifyClient {
     final d = await _map('/applications/$uuid/logs', {'lines': lines});
     return '${d['logs'] ?? ''}';
   }
+
+  // --- Services -------------------------------------------------------------
+
+  Future<List<dynamic>> serviceEnvs(String uuid) => _list('/services/$uuid/envs');
+  Future<void> setServiceEnv(String uuid, String key, String value, {required bool create}) async {
+    final body = {'key': key, 'value': value};
+    create ? await dio.post('/services/$uuid/envs', data: body) : await dio.patch('/services/$uuid/envs', data: body);
+  }
+
+  Future<void> deleteServiceEnv(String uuid, String envUuid) => dio.delete('/services/$uuid/envs/$envUuid');
+
+  /// `{persistent_storages: [...], file_storages: [...]}`
+  Future<Map<String, dynamic>> serviceStorages(String uuid) => _map('/services/$uuid/storages');
+  Future<List<dynamic>> serviceTasks(String uuid) => _list('/services/$uuid/scheduled-tasks');
+  Future<String> serviceLogs(String uuid, {int lines = 200}) async =>
+      '${(await _map('/services/$uuid/logs', {'lines': lines}))['logs'] ?? ''}';
+
+  /// [action] is start, stop or restart. Returns the server's "queued" message.
+  Future<String> serviceAction(String uuid, String action) async {
+    final d = (await dio.post('/services/$uuid/$action')).data;
+    return d is Map ? '${d['message'] ?? 'Request queued.'}' : 'Request queued.';
+  }
+
+  Future<List<dynamic>> serviceApplications(String uuid) => _list('/services/$uuid/applications');
+  Future<List<dynamic>> serviceDatabases(String uuid) => _list('/services/$uuid/databases');
+  Future<void> updateService(String uuid, Map<String, dynamic> body) => dio.patch('/services/$uuid', data: body);
+
+  /// [kind] is `applications` or `databases`.
+  Future<void> updateServiceComponent(String uuid, String kind, String id, Map<String, dynamic> body) =>
+      dio.patch('/services/$uuid/$kind/$id', data: body);
+
+  Future<void> deleteService(String uuid, {required bool deleteVolumes}) => dio.delete('/services/$uuid',
+      queryParameters: {'delete_volumes': deleteVolumes, 'delete_configurations': true, 'docker_cleanup': true});
 }
 
 /// Normalises user input: adds https:// when missing, strips trailing slashes

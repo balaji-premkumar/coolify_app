@@ -45,10 +45,11 @@ class LockController extends Notifier<AppLockState> with WidgetsBindingObserver 
         coverVisible.value = false;
         final at = _backgroundedAt;
         _backgroundedAt = null;
-        // Elapsed time unknown (e.g. process was frozen) => lock.
+        // at == null: the resume came from the system auth prompt (background
+        // events are ignored while it is in flight), not a real background trip.
         if (state == AppLockState.unlocked &&
-            (at == null ||
-                DateTime.now().difference(at).inSeconds >= graceSeconds)) {
+            at != null &&
+            DateTime.now().difference(at).inSeconds >= graceSeconds) {
           state = AppLockState.locked;
         }
       case AppLifecycleState.inactive:

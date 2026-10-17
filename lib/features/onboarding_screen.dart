@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import '../core/coolify_client.dart';
 import '../security/credential_store.dart';
 
-/// First-run (and expired-token) screen. When [existing] is given, only the
+/// First-run, add-server and expired-token screen. When [existing] is given, only the
 /// token is asked for and the saved URL is kept.
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, required this.store, required this.onDone, this.existing});
-  final CredentialStore store;
+  const OnboardingScreen({super.key, required this.onDone, this.existing});
   final void Function(Credentials) onDone;
   final Credentials? existing;
   @override
@@ -16,6 +15,7 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   late final _url = TextEditingController(text: widget.existing?.baseUrl);
+  final _name = TextEditingController();
   final _token = TextEditingController();
   DateTime? _expiry;
   bool _busy = false;
@@ -30,9 +30,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final client = CoolifyClient(baseUrl: url, token: token);
       await client.version();
       await client.currentTeam(); // fails with 401 if the token is bad
-      final creds = Credentials(baseUrl: url, token: token, tokenExpiresAt: _expiry);
-      await widget.store.save(creds);
-      widget.onDone(creds);
+      final old = widget.existing;
+      widget.onDone(old != null
+          ? old.copyWith(token: token, tokenExpiresAt: _expiry)
+          : Credentials(name: _name.text, baseUrl: url, token: token, tokenExpiresAt: _expiry));
+      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
     } on DioException catch (e) {
       setState(() => _error = e.error is TokenRejected
           ? 'Token rejected (expired or revoked).'
@@ -55,6 +57,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           keyboardType: TextInputType.url,
           decoration: const InputDecoration(labelText: 'Site URL', hintText: 'https://coolify.example.com'),
         ),
+        if (!renew) ...[
+          const SizedBox(height: 12),
+          TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name (optional)')),
+        ],
         const SizedBox(height: 12),
         TextField(
           controller: _token, obscureText: true, autocorrect: false, enableSuggestions: false,

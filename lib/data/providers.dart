@@ -1,14 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/coolify_client.dart';
+import 'accounts.dart';
 import 'models.dart';
 
-/// Overridden by a nested ProviderScope once the app is unlocked and
-/// credentials are loaded, so nothing here exists while locked.
-final clientProvider = Provider<CoolifyClient>((ref) => throw StateError('locked'));
-final tokenRejectedProvider = Provider<VoidCallback>((ref) => () {});
-final tokenExpiryProvider = Provider<DateTime?>((ref) => null);
-final baseUrlProvider = Provider<String>((ref) => '');
+final _activeProvider = Provider((ref) => ref.watch(accountsProvider.select((s) => s.active)));
+
+/// Client for the active server; rebuilt (and every provider below with it)
+/// when the user switches servers or replaces a token.
+final clientProvider = Provider<CoolifyClient>((ref) {
+  final a = ref.watch(_activeProvider);
+  if (a == null) throw StateError('No server configured');
+  return CoolifyClient(baseUrl: a.baseUrl, token: a.token);
+});
+final tokenRejectedProvider =
+    Provider<VoidCallback>((ref) => () => ref.read(accountsProvider.notifier).tokenRejected());
+final tokenExpiryProvider = Provider<DateTime?>((ref) => ref.watch(_activeProvider)?.tokenExpiresAt);
+final baseUrlProvider = Provider<String>((ref) => ref.watch(_activeProvider)?.baseUrl ?? '');
 
 List<T> _map<T>(List<dynamic> l, T Function(Map<String, dynamic>) f) =>
     l.whereType<Map>().map((m) => f(Map<String, dynamic>.from(m))).toList();
@@ -50,3 +58,25 @@ final deploymentDetailProvider = FutureProvider.autoDispose.family((ref, String 
 
 final appLogsProvider = FutureProvider.autoDispose.family((ref, String uuid) =>
     ref.watch(clientProvider).applicationLogs(uuid));
+
+final serviceEnvsProvider = FutureProvider.autoDispose.family((ref, String uuid) async {
+  final l = await ref.watch(clientProvider).serviceEnvs(uuid);
+  return _map(l, (j) => j)..sort((a, b) => '${a['key']}'.compareTo('${b['key']}'));
+});
+
+final serviceStoragesProvider = FutureProvider.autoDispose.family((ref, String uuid) =>
+    ref.watch(clientProvider).serviceStorages(uuid));
+
+final serviceTasksProvider = FutureProvider.autoDispose.family((ref, String uuid) async =>
+    _map(await ref.watch(clientProvider).serviceTasks(uuid), (j) => j));
+
+final serviceLogsProvider = FutureProvider.autoDispose.family((ref, String uuid) =>
+    ref.watch(clientProvider).serviceLogs(uuid));
+
+/// A service's containers as `(kind, json)`, kind being `applications` or `databases`.
+final serviceComponentsProvider = FutureProvider.autoDispose.family((ref, String uuid) async {
+  final c = ref.watch(clientProvider);
+  final apps = _map(await c.serviceApplications(uuid), (j) => j);
+  final dbs = _map(await c.serviceDatabases(uuid), (j) => j);
+  return [for (final a in apps) ('applications', a), for (final d in dbs) ('databases', d)];
+});

@@ -5,6 +5,7 @@ import '../data/models.dart';
 import '../data/providers.dart';
 import '../shared/widgets.dart';
 import 'deployments.dart';
+import 'service_page.dart';
 import 'shell.dart';
 
 class ResourcesPage extends ConsumerStatefulWidget {
@@ -85,7 +86,8 @@ class ResourceTile extends StatelessWidget {
         title: Text(r.name),
         subtitle: Text(r.fqdn ?? r.type, maxLines: 1, overflow: TextOverflow.ellipsis),
         trailing: StatusChip(r.status),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ResourceDetail(r))),
+        onTap: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => r.kind == ResourceKind.service ? ServicePage(r) : ResourceDetail(r))),
       );
 }
 

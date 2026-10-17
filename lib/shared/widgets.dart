@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import '../core/coolify_client.dart';
 import '../data/models.dart';
 import '../data/providers.dart';
@@ -12,6 +13,14 @@ Color healthColor(BuildContext c, Health h) => switch (h) {
       Health.neutral => Theme.of(c).colorScheme.outline,
     };
 
+/// `running:healthy` -> `Running (healthy)`, like the Coolify UI.
+String prettyStatus(String status) {
+  if (status.isEmpty) return 'Unknown';
+  final parts = status.split(':');
+  final head = '${parts.first[0].toUpperCase()}${parts.first.substring(1)}';
+  return parts.length > 1 && parts[1].isNotEmpty ? '$head (${parts[1]})' : head;
+}
+
 class StatusChip extends StatelessWidget {
   const StatusChip(this.status, {super.key});
   final String status;
@@ -20,7 +29,7 @@ class StatusChip extends StatelessWidget {
     final col = healthColor(context, healthOf(status));
     return Chip(
       visualDensity: VisualDensity.compact,
-      label: Text(status.isEmpty ? 'unknown' : status, style: TextStyle(color: col, fontSize: 12)),
+      label: Text(prettyStatus(status), style: TextStyle(color: col, fontSize: 12)),
       side: BorderSide(color: col),
       backgroundColor: Colors.transparent,
     );
@@ -39,7 +48,8 @@ class AsyncBody<T> extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => value.when(
         data: builder,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) {
+        error: (err, _) {
+          final e = unwrapProviderError(err);
           if (e is DioException && e.error is TokenRejected) {
             WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(tokenRejectedProvider)());
           }
@@ -56,7 +66,11 @@ class AsyncBody<T> extends ConsumerWidget {
       );
 }
 
+/// Riverpod 3 wraps errors from dependency providers in ProviderException.
+Object unwrapProviderError(Object e) => e is ProviderException ? unwrapProviderError(e.exception) : e;
+
 String describeError(Object e) {
+  e = unwrapProviderError(e);
   if (e is DioException) {
     if (e.error is TokenRejected) return 'Token expired or revoked.';
     final code = e.response?.statusCode;
